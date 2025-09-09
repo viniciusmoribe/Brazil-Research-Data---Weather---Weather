@@ -90,7 +90,7 @@ jobs:
           from: ${{ secrets.MAIL_FROM }}
           to: ${{ secrets.MAIL_TO }}
           subject: "VHI - imagens semana ${{ env.WEEK }}"
-          secure: true
+          secure: starttls
           convert_markdown: true
           body: |
             **VHI semanal (semana ${{ env.WEEK }})**
