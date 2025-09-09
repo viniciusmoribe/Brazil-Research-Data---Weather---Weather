@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       attachments:
-        description: 'Arquivos a anexar (um por linha)'
+        description: 'Imagens a embutir (um caminho por linha). Se vazio, usa o padrão.'
         required: false
         type: string
         default: |
@@ -15,11 +15,11 @@ on:
           vhi_images/combined_Rondonia_Espirito_Santo.png
           vhi_images/Bahia_combined.png
       VHI_WEEK:
-        description: 'Forçar semana (1-53). Se vazio, usa ISO atual (BRT).'
+        description: 'Forçar semana (1–53). Se vazio, usa ISO atual (BRT).'
         required: false
         type: string
       VHI_MAX_LOOKBACK:
-        description: 'Máx. de semanas para voltar (default 10).'
+        description: 'Máx. semanas p/ voltar (default 10).'
         required: false
         type: string
 
@@ -30,7 +30,7 @@ jobs:
       PYTHONIOENCODING: 'utf-8'
       LANG: 'C.UTF-8'
       LC_ALL: 'C.UTF-8'
-      # >>> Lista padrão de anexos (edite aqui quando quiser) <<<
+      # Lista padrão (pode editar)
       DEFAULT_ATTACHMENTS: |
         vhi_images/combined_Minas_Gerais_Sao_Paulo.png
         vhi_images/combined_Rondonia_Espirito_Santo.png
@@ -56,7 +56,6 @@ jobs:
 
       - name: Run VHI script
         env:
-          # inputs de workflow_dispatch (se não vierem, ficam vazios)
           VHI_WEEK: ${{ github.event.inputs.VHI_WEEK }}
           VHI_MAX_LOOKBACK: ${{ github.event.inputs.VHI_MAX_LOOKBACK }}
         run: |
@@ -65,7 +64,6 @@ jobs:
           ls -la vhi_images || true
 
       - name: Read week number
-        id: week
         run: |
           if [ -f vhi_images/week.txt ]; then
             echo "WEEK=$(cat vhi_images/week.txt)" >> $GITHUB_ENV
@@ -73,28 +71,59 @@ jobs:
             echo "WEEK=?" >> $GITHUB_ENV
           fi
 
-      # (opcional) manter as imagens como artefato
+      - name: Build inline attachments list with CIDs
+        env:
+          ATTACHMENTS: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
+        run: |
+          echo "Arquivos base:"
+          echo "$ATTACHMENTS"
+
+          i=0
+          INLINE=""
+          CID_HTML=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            i=$((i+1))
+            case $i in
+              1) CID=mgsp;  ALT="Minas Gerais acima de Sao Paulo" ;;
+              2) CID=roes;  ALT="Rondonia acima de Espirito Santo" ;;
+              3) CID=bahia; ALT="Bahia" ;;
+              *) CID="img$i"; ALT="$(basename "$line")" ;;
+            esac
+
+            INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline"$'\n'
+            CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
+          done <<< "$ATTACHMENTS"
+
+          echo "INLINE_ATTACHMENTS<<EOF" >> $GITHUB_ENV
+          echo "${INLINE}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "IMAGES_HTML<<EOF" >> $GITHUB_ENV
+          echo "${CID_HTML}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Upload images as artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: vhi_images
           path: vhi_images/*.png
 
-      - name: Send email with attachments
+      - name: Send email (inline images) - SSL 465
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
+          server_port: 465
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           from: ${{ secrets.MAIL_FROM }}
           to: ${{ secrets.MAIL_TO }}
           subject: "VHI - imagens semana ${{ env.WEEK }}"
           secure: true
-          convert_markdown: true
-          body: |
-            **VHI semanal (semana ${{ env.WEEK }})**
-
-            Seguem as composições finais em anexo.
-          # Se o usuário passar anexos no "Run workflow", usa-os; senão, usa a lista padrão
-          attachments: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
+          html_body: |
+            <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;">
+              <p><strong>VHI semanal (semana ${{ env.WEEK }})</strong></p>
+              ${{ env.IMAGES_HTML }}
+              <p style="color:#666;font-size:12px;">Envio automático – GitHub Actions.</p>
+            </div>
+          attachments: ${{ env.INLINE_ATTACHMENTS }}
