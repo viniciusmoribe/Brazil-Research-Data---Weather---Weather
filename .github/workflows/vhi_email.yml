@@ -107,13 +107,13 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-      # Preview (opcional) para conferir no log
+
       - name: Preview HTML and CIDs in logs
         run: |
           echo "--- INLINE_ATTACHMENTS ---"
           echo "${{ env.INLINE_ATTACHMENTS }}"
           echo "--- IMAGES_HTML ---"
-          echo "${{ env.IMAGES_HTML }}"
+          printf "%s\n" "${{ env.IMAGES_HTML }}"
 
       - name: Send email (inline images) - SSL 465 (HTML)
         uses: dawidd6/action-send-mail@v3
