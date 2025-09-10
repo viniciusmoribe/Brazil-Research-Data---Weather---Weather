@@ -2,12 +2,11 @@ name: VHI semanal + email
 
 on:
   schedule:
-    # Segunda 13:00 UTC = 10:00 BRT
-    - cron: '0 13 * * 1'
+    - cron: '0 13 * * 1'   # Segunda 13:00 UTC = 10:00 BRT
   workflow_dispatch:
     inputs:
       attachments:
-        description: 'Imagens a embutir (um caminho por linha). Se vazio, usa o padrão.'
+        description: 'Imagens a embutir (um por linha). Se vazio, usa o padrão.'
         required: false
         type: string
         default: |
@@ -30,7 +29,6 @@ jobs:
       PYTHONIOENCODING: 'utf-8'
       LANG: 'C.UTF-8'
       LC_ALL: 'C.UTF-8'
-      # Lista padrão (pode editar)
       DEFAULT_ATTACHMENTS: |
         vhi_images/combined_Minas_Gerais_Sao_Paulo.png
         vhi_images/combined_Rondonia_Espirito_Santo.png
@@ -91,6 +89,7 @@ jobs:
               *) CID="img$i"; ALT="$(basename "$line")" ;;
             esac
 
+            # cada item inline com CID correspondente
             INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline"$'\n'
             CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
           done <<< "$ATTACHMENTS"
@@ -120,7 +119,8 @@ jobs:
           to: ${{ secrets.MAIL_TO }}
           subject: "VHI - imagens semana ${{ env.WEEK }}"
           secure: true
-          html_body: |
+          content_type: text/html            # << força HTML
+          body: |
             <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;">
               <p><strong>VHI semanal (semana ${{ env.WEEK }})</strong></p>
               ${{ env.IMAGES_HTML }}
