@@ -89,7 +89,6 @@ jobs:
               *) CID="img$i"; ALT="$(basename "$line")" ;;
             esac
 
-            # cada item inline com CID correspondente
             INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline"$'\n'
             CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
           done <<< "$ATTACHMENTS"
@@ -108,7 +107,15 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-      - name: Send email (inline images) - SSL 465
+      # Preview (opcional) para conferir no log
+      - name: Preview HTML and CIDs in logs
+        run: |
+          echo "--- INLINE_ATTACHMENTS ---"
+          echo "${{ env.INLINE_ATTACHMENTS }}"
+          echo "--- IMAGES_HTML ---"
+          echo "${{ env.IMAGES_HTML }}"
+
+      - name: Send email (inline images) - SSL 465 (HTML)
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -119,8 +126,8 @@ jobs:
           to: ${{ secrets.MAIL_TO }}
           subject: "VHI - imagens semana ${{ env.WEEK }}"
           secure: true
-          content_type: text/html            # << força HTML
-          body: |
+          # IMPORTANTE: usar html_body (não body/convert_markdown)
+          html_body: |
             <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;">
               <p><strong>VHI semanal (semana ${{ env.WEEK }})</strong></p>
               ${{ env.IMAGES_HTML }}
