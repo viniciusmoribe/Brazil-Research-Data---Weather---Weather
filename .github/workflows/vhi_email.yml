@@ -69,39 +69,38 @@ jobs:
             echo "WEEK=?" >> $GITHUB_ENV
           fi
 
-      - name: Build inline attachments list with CIDs
+      # Constrói o HTML com imagens embutidas em Base64 (sem anexos)
+      - name: Build Base64 HTML
         env:
           ATTACHMENTS: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
         run: |
-          echo "Arquivos base:"
+          echo "Arquivos para embutir:"
           printf "%s\n" "$ATTACHMENTS"
 
           i=0
-          INLINE=""
-          CID_HTML=""
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
+          HTML=""
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
             i=$((i+1))
             case $i in
-              1) CID="mgsp@vhi";  ALT="Minas Gerais acima de Sao Paulo" ;;
-              2) CID="roes@vhi";  ALT="Rondonia acima de Espirito Santo" ;;
-              3) CID="bahia@vhi"; ALT="Bahia" ;;
-              *) CID="img$i@vhi"; ALT="$(basename "$line")" ;;
+              1) ALT="Minas Gerais acima de Sao Paulo" ;;
+              2) ALT="Rondonia acima de Espirito Santo" ;;
+              3) ALT="Bahia" ;;
+              *) ALT="$(basename "$path")" ;;
             esac
 
-            # anexo inline com Content-ID + content_type explícito
-            INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline;content_type=image/png"$'\n'
-            # HTML referenciando o CID
-            CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
+            if [ -f "$path" ]; then
+              # codifica a imagem como Base64 numa linha (GNU base64 no runner usa -w 0)
+              DATA=$(base64 -w 0 "$path")
+              HTML="${HTML}<p><strong>${ALT}</strong></p><img src=\"data:image/png;base64,${DATA}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
+            else
+              HTML="${HTML}<p><strong>${ALT}</strong> (arquivo não encontrado: ${path})</p>"
+            fi
           done <<< "$ATTACHMENTS"
 
           {
-            echo "INLINE_ATTACHMENTS<<EOF"
-            printf "%s" "$INLINE"
-            echo
-            echo "EOF"
             echo "IMAGES_HTML<<EOF"
-            printf "%s" "$CID_HTML"
+            printf "%s" "$HTML"
             echo
             echo "EOF"
           } >> "$GITHUB_ENV"
@@ -112,19 +111,16 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-      # (opcional) debug – não bloqueia
-      - name: Preview HTML and CIDs in logs
+      # (opcional) visualizar no log o HTML gerado
+      - name: Preview HTML in logs (optional)
         continue-on-error: true
         env:
-          INLINE_ATTACH_PREVIEW: ${{ env.INLINE_ATTACHMENTS }}
           HTML_PREVIEW: ${{ env.IMAGES_HTML }}
         run: |
-          echo "--- INLINE_ATTACHMENTS ---"
-          printf '%s\n' "$INLINE_ATTACH_PREVIEW"
           echo "--- IMAGES_HTML ---"
           printf '%s\n' "$HTML_PREVIEW"
 
-      - name: Send email (inline images) - SSL 465 (HTML)
+      - name: Send email (HTML com imagens embutidas) - SSL 465
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -141,4 +137,5 @@ jobs:
               ${{ env.IMAGES_HTML }}
               <p style="color:#666;font-size:12px;">Envio automático – GitHub Actions.</p>
             </div>
-          attachments: ${{ env.INLINE_ATTACHMENTS }}
+          # Se quiser anexar também os PNGs além do inline, descomente abaixo:
+          # attachments: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
