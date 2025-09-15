@@ -74,7 +74,7 @@ jobs:
           ATTACHMENTS: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
         run: |
           echo "Arquivos base:"
-          echo "$ATTACHMENTS"
+          printf "%s\n" "$ATTACHMENTS"
 
           i=0
           INLINE=""
@@ -93,13 +93,16 @@ jobs:
             CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
           done <<< "$ATTACHMENTS"
 
-          echo "INLINE_ATTACHMENTS<<EOF" >> $GITHUB_ENV
-          echo "${INLINE}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-          echo "IMAGES_HTML<<EOF" >> $GITHUB_ENV
-          echo "${CID_HTML}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          {
+            echo "INLINE_ATTACHMENTS<<EOF"
+            printf "%s" "$INLINE"
+            echo
+            echo "EOF"
+            echo "IMAGES_HTML<<EOF"
+            printf "%s" "$CID_HTML"
+            echo
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Upload images as artifact (optional)
         uses: actions/upload-artifact@v4
@@ -107,13 +110,17 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-
+      # Preview só para debug (não bloqueia)
       - name: Preview HTML and CIDs in logs
+        continue-on-error: true
+        env:
+          INLINE_ATTACH_PREVIEW: ${{ env.INLINE_ATTACHMENTS }}
+          HTML_PREVIEW: ${{ env.IMAGES_HTML }}
         run: |
           echo "--- INLINE_ATTACHMENTS ---"
-          echo "${{ env.INLINE_ATTACHMENTS }}"
+          printf '%s\n' "$INLINE_ATTACH_PREVIEW"
           echo "--- IMAGES_HTML ---"
-          printf "%s\n" "${{ env.IMAGES_HTML }}"
+          printf '%s\n' "$HTML_PREVIEW"
 
       - name: Send email (inline images) - SSL 465 (HTML)
         uses: dawidd6/action-send-mail@v3
@@ -126,7 +133,6 @@ jobs:
           to: ${{ secrets.MAIL_TO }}
           subject: "VHI - imagens semana ${{ env.WEEK }}"
           secure: true
-          # IMPORTANTE: usar html_body (não body/convert_markdown)
           html_body: |
             <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;">
               <p><strong>VHI semanal (semana ${{ env.WEEK }})</strong></p>
