@@ -69,20 +69,31 @@ jobs:
             echo "WEEK=?" >> $GITHUB_ENV
           fi
 
-      # ----- NOVO: cria o arquivo de lista preservando quebras de linha -----
-      - name: Build attachments list file
+      # Cria um arquivo com a lista de caminhos, robusto a colagens/sem quebras
+      - name: Build attachments list file (robust)
         env:
           INPUT_ATTACHMENTS: ${{ github.event.inputs.attachments }}
           DEFAULT_ATTACHMENTS_STEP: ${{ env.DEFAULT_ATTACHMENTS }}
         run: |
+          # 1) fonte: inputs ou default
           if [ -n "$INPUT_ATTACHMENTS" ]; then
-            printf '%s\n' "$INPUT_ATTACHMENTS" > attach_list.txt
+            SRC="$INPUT_ATTACHMENTS"
           else
-            printf '%s\n' "$DEFAULT_ATTACHMENTS_STEP" > attach_list.txt
+            SRC="$DEFAULT_ATTACHMENTS_STEP"
           fi
-          # normaliza CRLF, remove linhas vazias/espacos
-          sed -i 's/\r$//' attach_list.txt
-          awk 'NF' attach_list.txt > attach_list.clean && mv attach_list.clean attach_list.txt
+
+          # 2) normaliza CRLF -> LF e salva bruto
+          printf '%s' "$SRC" | tr -d '\r' > attach_raw.txt
+
+          # 3) extrai TODOS os caminhos com regex (mesmo colados)
+          #    pega sequências que começam com vhi_images/ e terminam em .png
+          grep -Eo 'vhi_images/[^[:space:]]+\.png' attach_raw.txt > attach_list.txt
+
+          # 4) se por algum motivo não captou nada, cai no fallback linha a linha
+          if [ ! -s attach_list.txt ]; then
+            awk 'NF' attach_raw.txt > attach_list.txt
+          fi
+
           echo "----- attach_list.txt -----"
           nl -ba attach_list.txt || true
 
@@ -122,17 +133,6 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-      # (opcional) visualizar no log o HTML gerado
-      - name: Preview HTML in logs (optional)
-        continue-on-error: true
-        env:
-          HTML_PREVIEW: ${{ env.IMAGES_HTML }}
-        run: |
-          echo "--- IMAGES_HTML (truncated) ---"
-          printf '%s' "$HTML_PREVIEW" | head -c 600
-          echo
-          echo "--------------------------------"
-
       - name: Send email (HTML com imagens embutidas) - SSL 465
         uses: dawidd6/action-send-mail@v3
         with:
@@ -150,6 +150,6 @@ jobs:
               ${{ env.IMAGES_HTML }}
               <p style="color:#666;font-size:12px;">Envio automático – GitHub Actions.</p>
             </div>
-          # Se quiser também anexar os PNGs, descomente:
+          # Caso queira também anexar os PNGs além do inline, descomente:
           # attachments: |
           #   $(cat attach_list.txt)

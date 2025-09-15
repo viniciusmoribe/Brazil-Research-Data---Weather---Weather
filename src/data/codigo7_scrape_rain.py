@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 # --------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------
-INPUT_XLSX = "data/raw/Brazil.xlsx"
+INPUT_XLSX = "data/raw/Brazil Tracking Municipalities.xlsx"
 OUTPUT_XLSX = "data/processed/Rain_forecast_Brazil.xlsx"
 TZ_LOCAL = ZoneInfo("America/Sao_Paulo")
 
