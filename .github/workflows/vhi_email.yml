@@ -69,14 +69,26 @@ jobs:
             echo "WEEK=?" >> $GITHUB_ENV
           fi
 
+      # ----- NOVO: cria o arquivo de lista preservando quebras de linha -----
+      - name: Build attachments list file
+        env:
+          INPUT_ATTACHMENTS: ${{ github.event.inputs.attachments }}
+          DEFAULT_ATTACHMENTS_STEP: ${{ env.DEFAULT_ATTACHMENTS }}
+        run: |
+          if [ -n "$INPUT_ATTACHMENTS" ]; then
+            printf '%s\n' "$INPUT_ATTACHMENTS" > attach_list.txt
+          else
+            printf '%s\n' "$DEFAULT_ATTACHMENTS_STEP" > attach_list.txt
+          fi
+          # normaliza CRLF, remove linhas vazias/espacos
+          sed -i 's/\r$//' attach_list.txt
+          awk 'NF' attach_list.txt > attach_list.clean && mv attach_list.clean attach_list.txt
+          echo "----- attach_list.txt -----"
+          nl -ba attach_list.txt || true
+
       # Constrói o HTML com imagens embutidas em Base64 (sem anexos)
       - name: Build Base64 HTML
-        env:
-          ATTACHMENTS: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
         run: |
-          echo "Arquivos para embutir:"
-          printf "%s\n" "$ATTACHMENTS"
-
           i=0
           HTML=""
           while IFS= read -r path; do
@@ -90,13 +102,12 @@ jobs:
             esac
 
             if [ -f "$path" ]; then
-              # codifica a imagem como Base64 numa linha (GNU base64 no runner usa -w 0)
               DATA=$(base64 -w 0 "$path")
               HTML="${HTML}<p><strong>${ALT}</strong></p><img src=\"data:image/png;base64,${DATA}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
             else
               HTML="${HTML}<p><strong>${ALT}</strong> (arquivo não encontrado: ${path})</p>"
             fi
-          done <<< "$ATTACHMENTS"
+          done < attach_list.txt
 
           {
             echo "IMAGES_HTML<<EOF"
@@ -117,8 +128,10 @@ jobs:
         env:
           HTML_PREVIEW: ${{ env.IMAGES_HTML }}
         run: |
-          echo "--- IMAGES_HTML ---"
-          printf '%s\n' "$HTML_PREVIEW"
+          echo "--- IMAGES_HTML (truncated) ---"
+          printf '%s' "$HTML_PREVIEW" | head -c 600
+          echo
+          echo "--------------------------------"
 
       - name: Send email (HTML com imagens embutidas) - SSL 465
         uses: dawidd6/action-send-mail@v3
@@ -137,5 +150,6 @@ jobs:
               ${{ env.IMAGES_HTML }}
               <p style="color:#666;font-size:12px;">Envio automático – GitHub Actions.</p>
             </div>
-          # Se quiser anexar também os PNGs além do inline, descomente abaixo:
-          # attachments: ${{ github.event.inputs.attachments != '' && github.event.inputs.attachments || env.DEFAULT_ATTACHMENTS }}
+          # Se quiser também anexar os PNGs, descomente:
+          # attachments: |
+          #   $(cat attach_list.txt)
