@@ -83,13 +83,15 @@ jobs:
             [ -z "$line" ] && continue
             i=$((i+1))
             case $i in
-              1) CID=mgsp;  ALT="Minas Gerais acima de Sao Paulo" ;;
-              2) CID=roes;  ALT="Rondonia acima de Espirito Santo" ;;
-              3) CID=bahia; ALT="Bahia" ;;
-              *) CID="img$i"; ALT="$(basename "$line")" ;;
+              1) CID="mgsp@vhi";  ALT="Minas Gerais acima de Sao Paulo" ;;
+              2) CID="roes@vhi";  ALT="Rondonia acima de Espirito Santo" ;;
+              3) CID="bahia@vhi"; ALT="Bahia" ;;
+              *) CID="img$i@vhi"; ALT="$(basename "$line")" ;;
             esac
 
-            INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline"$'\n'
+            # anexo inline com Content-ID + content_type explícito
+            INLINE="${INLINE}${line};name=$(basename "$line");content_id=${CID};disposition=inline;content_type=image/png"$'\n'
+            # HTML referenciando o CID
             CID_HTML="${CID_HTML}<p><strong>${ALT}</strong></p><img src=\"cid:${CID}\" alt=\"${ALT}\" style=\"max-width:100%;height:auto;border:1px solid #ddd\"/><br/><br/>"
           done <<< "$ATTACHMENTS"
 
@@ -110,7 +112,7 @@ jobs:
           name: vhi_images
           path: vhi_images/*.png
 
-      # Preview só para debug (não bloqueia)
+      # (opcional) debug – não bloqueia
       - name: Preview HTML and CIDs in logs
         continue-on-error: true
         env:
